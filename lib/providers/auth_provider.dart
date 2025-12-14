@@ -4,27 +4,29 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart'; // <-- UNTUK kIsWeb
+import 'package:flutter/foundation.dart'; // untuk kIsWeb
 import 'dart:io' show Platform;
 
+// Class sederhana untuk merepresentasikan user
+class AppUser {
+  final int id;
+  final String name;
+  final String email;
+
+  AppUser({required this.id, required this.name, required this.email});
+}
+
 class AuthProvider extends ChangeNotifier {
-  // BASE URL 
+  // BASE URL
   static String get baseUrl {
     if (kIsWeb) {
-      // Untuk Flutter Web
       return 'http://localhost:8000/api';
     }
-
     if (Platform.isAndroid) {
-      // Android Emulator
-      // return 'http://10.0.2.2:8000/api';
-      return 'http://10.218.85.36:8000/api';
+      return 'http://10.0.2.2:8000/api';
     }
-
-    // iOS / Desktop
     return 'http://localhost:8000/api';
   }
-
 
   String? _token;
   int? _userId;
@@ -32,6 +34,7 @@ class AuthProvider extends ChangeNotifier {
   String? _email;
   bool _isLoggedIn = false;
 
+  // Getter yang sudah ada
   bool get isAuthenticated => _token != null;
   String? get token => _token;
   int? get userId => _userId;
@@ -39,11 +42,16 @@ class AuthProvider extends ChangeNotifier {
   String? get email => _email;
   bool get isLoggedIn => _isLoggedIn;
 
+  // Getter BARU: untuk mengembalikan objek user (dipakai di news_detail_screen.dart)
+  AppUser? get user => _userId != null
+      ? AppUser(id: _userId!, name: _username ?? '', email: _email ?? '')
+      : null;
+
   AuthProvider() {
     _loadFromStorage();
   }
 
-  // LOAD DATA DARI STORAGE
+  // LOAD DATA DARI SHARED PREFERENCES
   Future<void> _loadFromStorage() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -55,11 +63,11 @@ class AuthProvider extends ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      print("Error loading storage: $e");
+      debugPrint("Error loading auth storage: $e");
     }
   }
 
-  // SIMPAN USER
+  // SIMPAN USER KE STORAGE & MEMORY
   Future<void> _saveUser(
       String token, int userId, String name, String email) async {
     final prefs = await SharedPreferences.getInstance();
@@ -78,7 +86,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // LOGIN USER
+  // LOGIN
   Future<String> loginUser({
     required String email,
     required String password,
@@ -106,14 +114,14 @@ class AuthProvider extends ChangeNotifier {
         return "success";
       }
 
-      return jsonDecode(response.body)['message'] ?? "Login gagal";
+      final errorMsg = jsonDecode(response.body)['message'] ?? "Login gagal";
+      return errorMsg;
     } catch (e) {
       return "Tidak bisa terhubung ke server: $e";
     }
   }
 
-  
-  // REGISTER USER
+  // REGISTER
   Future<String> registerUser({
     required String username,
     required String email,
@@ -132,18 +140,18 @@ class AuthProvider extends ChangeNotifier {
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        // Auto login setelah register
+        // Auto login setelah registrasi sukses
         return await loginUser(email: email, password: password);
       }
 
-      return jsonDecode(response.body)['message'] ?? "Registrasi gagal";
+      final errorMsg = jsonDecode(response.body)['message'] ?? "Registrasi gagal";
+      return errorMsg;
     } catch (e) {
-      return "Tidak bisa terhubung ke server";
+      return "Tidak bisa terhubung ke server: $e";
     }
   }
 
-  
-  // LOGOUT USER
+  // LOGOUT
   Future<void> logout() async {
     try {
       if (_token != null) {
@@ -154,9 +162,11 @@ class AuthProvider extends ChangeNotifier {
           },
         );
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint("Error during logout request: $e");
+    }
 
-    // CLEAR LOCAL DATA
+    // Hapus semua data lokal
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
 
